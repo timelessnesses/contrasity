@@ -3,13 +3,56 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use clap::Parser;
 use contrast::round_float;
 
 mod contrast;
 
+#[derive(clap::Parser)]
+struct Cli {
+    /// List GPU renderers (for the SELECTED_GPU_RENDERER arg)
+    #[arg(short, long, default_value_t = false)]
+    list_gpu_renderers: bool,
+    /// Select your own renderer if you want to
+    #[arg(short, long)]
+    selected_gpu_renderer: Option<usize>,
+
+    /// Force VSync
+    #[arg(short, long, default_value_t = false)]
+    vsync: bool,
+    /// Force acceleration
+    #[arg(short, long, default_value_t = true)]
+    acceleration: bool,
+}
+
 fn main() {
     let ctx = sdl2::init().unwrap();
     let video = ctx.video().unwrap();
+    let parsed = Cli::parse();
+    if parsed.list_gpu_renderers {
+        for (i, item) in sdl2::render::drivers().enumerate() {
+            let mut flags = vec![];
+            if item.flags & 0x01 > 0 {
+                flags.push("Software Rendered");
+            }
+            if item.flags & 0x02 > 0 {
+                flags.push("Renderer Accelerated");
+            }
+            if item.flags & 0x04 > 0 {
+                flags.push("VSynced");
+            }
+            if item.flags & 0x08 > 0 {
+                flags.push("Support rendering into a texture");
+            }
+            println!(
+                "Renderer #{}:\n   Name: {}\n  Flags: {}",
+                i + 1,
+                item.name,
+                flags.join(", ")
+            )
+        }
+        return;
+    }
     let window = video
         .window("Contrasity", 800, 600)
         .position_centered()
@@ -17,7 +60,17 @@ fn main() {
         .allow_highdpi()
         .build()
         .unwrap();
-    let mut canvas = window.into_canvas().accelerated().build().unwrap();
+    let mut canvas = window.into_canvas();
+    if let Some(index) = parsed.selected_gpu_renderer {
+        canvas = canvas.index(index as u32 - 1);
+    }
+    if parsed.vsync {
+        canvas = canvas.present_vsync();
+    }
+    if parsed.acceleration {
+        canvas = canvas.accelerated();
+    }
+    let mut canvas = canvas.build().unwrap();
     let state = Arc::new(RwLock::new(State::default()));
     receive_stdin_options(Arc::clone(&state));
     let mut event_pump = ctx.event_pump().unwrap();
@@ -241,7 +294,6 @@ fn main() {
             lpf = fps;
             lft = std::time::Instant::now();
         }
-        canvas.present();
     }
     state.write().unwrap().exit = true;
 }
