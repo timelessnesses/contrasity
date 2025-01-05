@@ -1,6 +1,5 @@
 use std::{
-    io::{stdout, Write},
-    sync::{Arc, RwLock},
+    io::{stdout, Write}, str::FromStr, sync::{Arc, RwLock}
 };
 
 use clap::Parser;
@@ -318,36 +317,66 @@ impl Default for State {
 fn receive_stdin_options(state: Arc<RwLock<State>>) {
     let stdin = std::io::stdin();
     std::thread::spawn(move || while !state.read().unwrap().exit {
-        print!("Foreground: ");
-        stdout().flush().unwrap();
-        let mut fg = String::new();
-        stdin.read_line(&mut fg).unwrap();
-        let fg = fg.trim().split(' ').collect::<Vec<&str>>();
-        if fg.len() != 3 {
-            println!("Invalid foreground color");
-            continue;
-        }
-        let fg = (
-            fg[0].parse::<f64>().unwrap(),
-            fg[1].parse::<f64>().unwrap(),
-            fg[2].parse::<f64>().unwrap(),
-        );
         print!("Background: ");
         stdout().flush().unwrap();
         let mut bg = String::new();
         stdin.read_line(&mut bg).unwrap();
-        let bg = bg.trim().split(' ').collect::<Vec<&str>>();
-        if bg.len() != 3 {
-            println!("Invalid background color");
-            continue;
+        bg = bg.trim().to_string();
+        let bged;
+        if bg.starts_with("#") {
+            let parsed = hex_color::HexColor::from_str(&bg);
+            match parsed {
+                Ok(color) => {
+                    bged = (color.r as f64, color.g as f64, color.b as f64);
+                }
+                Err(e) => {
+                    println!("Invalid background color: {:?}", e);
+                    continue;
+                }
+            }
+        } else {
+            let gayed = bg.trim().split(' ').collect::<Vec<&str>>();
+            if gayed.len() != 3 {
+                println!("Invalid background color: invalid length");
+                continue;
+            }
+            bged = (
+                gayed[0].parse::<f64>().unwrap(),
+                gayed[1].parse::<f64>().unwrap(),
+                gayed[2].parse::<f64>().unwrap(),
+            );
         }
-        let bg = (
-            bg[0].parse::<f64>().unwrap(),
-            bg[1].parse::<f64>().unwrap(),
-            bg[2].parse::<f64>().unwrap(),
-        );
+        print!("Foreground: ");
+        stdout().flush().unwrap();
+        let mut fg = String::new();
+        stdin.read_line(&mut fg).unwrap();
+        fg = fg.trim().to_string();
+        let fged;
+        if fg.starts_with("#") {
+            let parsed = hex_color::HexColor::from_str(&fg);
+            match parsed {
+                Ok(color) => {
+                    fged = (color.r as f64, color.g as f64, color.b as f64);
+                }
+                Err(e) => {
+                    println!("Invalid background color: {:?}", e);
+                    continue;
+                }
+            }
+        } else {
+            let gayed = fg.trim().split(' ').collect::<Vec<&str>>();
+            if gayed.len() != 3 {
+                println!("Invalid background color: invalid length");
+                continue;
+            }
+            fged = (
+                gayed[0].parse::<f64>().unwrap(),
+                gayed[1].parse::<f64>().unwrap(),
+                gayed[2].parse::<f64>().unwrap(),
+            );
+        }
         let mut b = state.write().unwrap();
-        b.fg = fg;
-        b.bg = bg;
+        b.fg = fged;
+        b.bg = bged;
     });
 }
